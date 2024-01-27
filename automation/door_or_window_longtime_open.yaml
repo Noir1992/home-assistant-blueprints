@@ -1,0 +1,59 @@
+blueprint:
+  name: Door/window open for a long time
+  description: Triggers when the given door/window sensor is open for a long time.
+  domain: automation
+  author: Noir1992
+
+  input:
+    sensor:
+      name: Door/window sensor
+      description: The door/window sensor to use for the automation.
+      selector:
+        entity:
+          filter:
+            domain: binary_sensor
+    thershold:
+      name: Threshold
+      description: The time in seconds that the sensor has to be open for the automation to trigger.
+      selector:
+        number:
+          min: 0
+          max: 7200
+          unit_of_measurement: seconds
+      default: 60
+    actions:
+      name: Actions
+      description: Notifications or similar to be run.
+      selector:
+        action: {}
+
+trigger:
+  - platform: state
+    entity_id: !input sensor
+    to: "on"
+    for:
+      seconds: !input thershold
+  - platform: state
+    entity_id: !input sensor
+    to: "off"
+
+variables:
+  var_threshold: !input thershold
+
+condition:
+  - condition: or
+    conditions:
+      - condition: state
+        entity_id: !input sensor
+        state: "on"
+      - condition: and
+        conditions:
+          - condition: state
+            entity_id: !input sensor
+            state: "off"
+          - condition: template
+            value_template: "{{ trigger.from_state.last_changed < now() - timedelta(seconds=var_threshold) }}"
+
+action: !input actions
+
+mode: single
