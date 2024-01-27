@@ -1,0 +1,80 @@
+blueprint:
+  name: High humidity
+  description: Triggers when the given thershold is reached.
+  domain: automation
+  author: Noir1992
+
+  input:
+    humidity_sensor:
+      name: Humidity sensor
+      description: The humidity sensor to use for the automation.
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: humidity
+    thershold:
+      name: Threshold
+      description: Humidity threshold.
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+      default: 70
+    delay:
+      name: Delay
+      description: The time the humidity level has to be over the threshold.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 3600
+          unit_of_measurement: seconds
+          mode: box
+    reset_value:
+      name: Reset value
+      description: Automation can only trigger again if this value was reached before. This is to prevent multiple actions if the humidity toggles around the threshold value.
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+      default: 67
+    disabled:
+      name: Disabled
+      description: Optional boolean input to disable the automation (eg. prevent automation if some is in the shower).
+      selector:
+        entity:
+          filter:
+            domain: input_boolean
+      default:
+    actions:
+      name: Actions
+      description: Notifications or similar to be run.
+      selector:
+        action: {}
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input humidity_sensor
+    above: !input thershold
+    for:
+      seconds: !input delay
+
+variables:
+  var_disabled: !input disabled
+
+condition:
+  - condition: template
+    value_template: "{{not var_disabled or is_state(var_disabled, 'off')}}"
+
+action:
+  - if: { condition: template, value_template: "{{ true }}" }
+    then: !input actions
+  - wait_for_trigger:
+      platform: numeric_state
+      entity_id: !input humidity_sensor
+      below: !input reset_value
+
+mode: single
