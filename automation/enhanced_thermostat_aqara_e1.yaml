@@ -1,0 +1,318 @@
+blueprint:
+  name: Enhanced thermostat Aqara E1
+  description: Enhanced thermostat handling for Aqara E1 thermostats.
+  domain: automation
+  author: Noir1992
+
+  input:
+    target_trvs:
+      name: Thermostats
+      description: The Aqara E1 thermostats.
+      selector:
+        entity:
+          domain: climate
+          multiple: true
+    external_temp_sensor:
+      name: External temperature sensor
+      description: The external temperature sensor.
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: temperature
+    external_temp_update_interval:
+      name: External temperature update interval
+      description: The interval in which the external temperature will be updated at the thermostats.
+      default: "/5"
+      selector:
+        text:
+    target_temp:
+      name: Target temperature
+      description: The input to control the target temperature.
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    eco_temp:
+      name: ECO temperature
+      description: The input to control the ECO temperature.
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    eco_mode_activated:
+      name: ECO activated
+      description: Boolean value to indicate if the ECO mode is active.
+      selector:
+        entity:
+          filter:
+            domain:
+              - input_boolean
+              - binary_sensor
+    window_sensors:
+      name: Window sensors
+      description: The window sensors.
+      default: []
+      selector:
+        entity:
+          domain:
+            - binary_sensor
+            - input_boolean
+          multiple: true
+    outdoor_temp_sensor:
+      name: Outdoor temperature sensor
+      description: The outdoor temperature sensor.
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: temperature
+    outdoor_tempt_threshold:
+      name: Outdoor temperature threshold
+      description: The minimum threshold that has to be reached for the thermostats to turn on.
+      default: 18
+      selector:
+        number:
+          min: 0
+          max: 25
+          unit_of_measurement: °C
+          step: 0.5
+    enable_delay:
+      name: Enable delay
+      description: Delay before thermostats will be turned on.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: seconds
+          step: 1
+    disable_delay:
+      name: Disable delay
+      description: Delay before thermostats will be turned off.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: seconds
+          step: 1
+
+variables:
+  external_temp_sensor: !input external_temp_sensor
+  external_temp_update_interval: !input external_temp_update_interval
+  target_temp: !input target_temp
+  eco_mode_activated: !input eco_mode_activated
+  eco_temp: !input eco_temp
+  window_sensors: !input window_sensors
+  are_windows_open: "{{ (window_sensors | select('is_state', 'on') | list | count) > 0}}"
+  outdoor_temp_sensor: !input outdoor_temp_sensor
+  outdoor_tempt_threshold: !input outdoor_tempt_threshold
+  is_temp_outside_below: "{{ (states(outdoor_temp_sensor) | float) <= outdoor_tempt_threshold }}"
+  are_thermostats_on: "{{ not are_windows_open and is_temp_outside_below }}"
+
+trigger:
+  - platform: time_pattern
+    minutes: !input external_temp_update_interval
+    id: idExternalTempInterval
+  - platform: state
+    entity_id: !input target_temp
+    id: idTargetTemp
+  - platform: state
+    entity_id: !input eco_temp
+    id: idECOTemp
+  - platform: state
+    entity_id: !input eco_mode_activated
+    id: idECOModeActivated
+  - platform: state
+    entity_id: !input window_sensors
+    to: "on"
+    for:
+      seconds: !input disable_delay
+    id: idWindowOn
+  - platform: state
+    entity_id: !input window_sensors
+    to: "off"
+    for:
+      seconds: !input enable_delay
+    id: idWindowOff
+  - platform: numeric_state
+    entity_id: !input outdoor_temp_sensor
+    above: !input outdoor_tempt_threshold
+    for:
+      seconds: !input disable_delay
+    id: idAboveOutdoorTempThreshold
+  - platform: numeric_state
+    entity_id: !input outdoor_temp_sensor
+    below: !input outdoor_tempt_threshold
+    for:
+      seconds: !input enable_delay
+    id: idBelowOutdoorTempThreshold
+
+condition:
+  - condition: or
+    conditions:
+      - alias: Update external temperatur if thermostat is on
+        condition: and
+        conditions:
+          - condition: trigger
+            id: idExternalTempInterval
+          - condition: template
+            value_template: "{{ are_thermostats_on }}"
+      - alias: Update target temperatur if thermostat is on, ECO mode is off and target temperatur changes
+        condition: and
+        conditions:
+          - condition: trigger
+            id: idTargetTemp
+          - condition: template
+            value_template: "{{ are_thermostats_on }}"
+          - condition: state
+            entity_id: !input eco_mode_activated
+            state: "off"
+      - alias: Update target temperatur if thermostat is on, ECO mode is on and ECO temperature changes
+        condition: and
+        conditions:
+          - condition: trigger
+            id: idECOTemp
+          - condition: template
+            value_template: "{{ are_thermostats_on }}"
+          - condition: state
+            entity_id: !input eco_mode_activated
+            state: "on"
+      - alias: Update target temperatur if thermostat is on, and ECO mode changes
+        condition: and
+        conditions:
+          - condition: trigger
+            id: idECOModeActivated
+          - condition: template
+            value_template: "{{ are_thermostats_on }}"
+      - alias: Update thermostat state on window status change if the outside temperature is below threshold
+        condition: and
+        conditions:
+          - condition: trigger
+            id:
+              - idWindowOn
+              - idWindowOff
+          - condition: template
+            value_template: "{{ is_temp_outside_below }}"
+      - alias: Disable thermostat if outside temperature is above threshold and thermostat is on
+        condition: and
+        conditions:
+          - condition: trigger
+            id: idAboveOutdoorTempThreshold
+          - condition: template
+            value_template: "{{ are_thermostats_on }}"
+      - alias: Enable thermostat if outside temperature is below threshold, thermostat is off and windows are closed
+        condition: and
+        conditions:
+          - condition: trigger
+            id: idBelowOutdoorTempThreshold
+          - condition: template
+            value_template: "{{ not are_thermostats_on }}"
+
+action:
+  - if:
+      - condition: or
+        conditions:
+          - condition: trigger
+            id:
+              - idExternalTempInterval
+              - idWindowOff
+          - condition: and
+            conditions:
+              - condition: trigger
+                id: "idBelowOutdoorTempThreshold"
+              - condition: template
+                value_template: "{{ are_thermostats_on }}"
+    then:
+      - alias: Set thermostats to external if needed and update temperature
+        repeat:
+          for_each: !input target_trvs
+          sequence:
+            - variables:
+                trv_name: "{{ device_attr(repeat.item, 'name') }}"
+                trv_temp_sensor_id: "{{ repeat.item | replace('climate.', 'select.') + '_sensor' }}"
+            - if:
+                - condition: template
+                  value_template: "{{ not is_state(trv_temp_sensor_id, 'external') }}"
+              then:
+                - service: select.select_option
+                  target:
+                    entity_id: "{{trv_temp_sensor_id}}"
+                  data:
+                    option: external
+                - delay:
+                    seconds: 10
+            - service: mqtt.publish
+              data:
+                topic: zigbee2mqtt/{{ trv_name }}/set/sensor_temp
+                payload_template: "{{ states(external_temp_sensor) | float(0) | round(1) }}"
+
+  - alias: Set target temperature of thermostats
+    if:
+      - condition: trigger
+        id:
+          - idECOModeActivated
+          - idBelowOutdoorTempThreshold
+          - idWindowOff
+    then:
+      - service: climate.set_temperature
+        target:
+          entity_id: !input target_trvs
+        data:
+          temperature: >
+            {% if states(eco_mode_activated) == 'on' %}
+              {{ states(eco_temp) }}
+            {% else %}
+              {{ states(target_temp) }}
+            {% endif %}
+
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: "idTargetTemp"
+        sequence:
+          - service: climate.set_temperature
+            target:
+              entity_id: !input target_trvs
+            data:
+              temperature: "{{ states(target_temp) }}"
+
+      - conditions:
+          - condition: trigger
+            id: "idECOTemp"
+        sequence:
+          - service: climate.set_temperature
+            target:
+              entity_id: !input target_trvs
+            data:
+              temperature: "{{ states(eco_temp) }}"
+
+      - alias: Turn off thermostats if a window opened or the outside temperature is above the threshold
+        conditions:
+          - condition: trigger
+            id:
+              - idWindowOn
+              - idAboveOutdoorTempThreshold
+        sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: !input target_trvs
+            data:
+              hvac_mode: "off"
+
+      - alias: Turn on thermostats if all windows closed or the outside temperature falls below the threshold
+        conditions:
+          - condition: trigger
+            id:
+              - idWindowOff
+              - idBelowOutdoorTempThreshold
+        sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: !input target_trvs
+            data:
+              hvac_mode: heat
+
+mode: queued
+max_exceeded: silent
