@@ -3,6 +3,7 @@ blueprint:
   description: Enhanced motion light detection.
   domain: automation
   author: Noir1992
+  source_url: https://github.com/Noir1992/home-assistant-blueprints/blob/main/automation/enhanced_motion_light.yaml
 
   input:
     motion_sensor:
@@ -11,7 +12,7 @@ blueprint:
       selector:
         entity:
           filter:
-            domain: binary_sensor
+          - domain: binary_sensor
             device_class: motion
     target_light:
       name: Light
@@ -19,7 +20,7 @@ blueprint:
       selector:
         target:
           entity:
-            domain: light
+          - domain: light
     lumen_sensor:
       name: Lumen sensor
       description: The lumen sensor to use for the automation. (optional)
@@ -27,15 +28,15 @@ blueprint:
       selector:
         entity:
           filter:
-            domain: sensor
+          - domain: sensor
     lumen_threshold:
       name: Lumen threshold
       description: The light will only be turned on if the lumen value is smaller. (This only applies if a lumen sensor is specified)
       default: 8
       selector:
         number:
-          min: 0
-          max: 200
+          min: 0.0
+          max: 200.0
           step: 0.1
           unit_of_measurement: lx
           mode: box
@@ -45,19 +46,22 @@ blueprint:
       default: 0
       selector:
         number:
-          min: 0
-          max: 7200
+          min: 0.0
+          max: 7200.0
           unit_of_measurement: seconds
           mode: box
+          step: 1.0
     alternative_brightness:
       name: Alternative brightness
       description: Alternative brightness. (optional)
       default:
       selector:
         number:
-          min: 0
-          max: 100
-          unit_of_measurement: "%"
+          min: 0.0
+          max: 100.0
+          unit_of_measurement: '%'
+          mode: slider
+          step: 1.0
     use_alternative_brightness:
       name: Use alternative brightness
       description: Boolean value to indicate if the alternative brightness should be used. (optional)
@@ -65,7 +69,9 @@ blueprint:
       selector:
         entity:
           filter:
-            domain: input_boolean
+          - domain:
+            - input_boolean
+            - binary_sensor
     disable_alternative_brightness:
       name: Disable alternative brightness
       description: Boolean input to disable the alternative brightness. (optional)
@@ -73,45 +79,45 @@ blueprint:
       selector:
         entity:
           filter:
-            domain: input_boolean
+          - domain: input_boolean
     disabled:
       name: Disabled
       description: Boolean input to disable the automation (eg. prevent automation if no one is home). (optional)
       default:
       selector:
-        entity:
+        entity: {}
 
 trigger:
-  - platform: state
-    entity_id: !input motion_sensor
-    to: "on"
-    id: idMotionOn
-  - platform: state
-    entity_id: !input motion_sensor
-    to: "on"
-    id: idMotionOnTimed
-    for:
-      seconds: 1
-  - platform: state
-    entity_id: !input motion_sensor
-    to: "off"
-    id: idMotionOff
-    for:
-      seconds: !input delay
-  - platform: numeric_state
-    entity_id: !input lumen_sensor
-    below: !input lumen_threshold
-    id: idLumen
+- platform: state
+  entity_id: !input motion_sensor
+  to: 'on'
+  id: idMotionOn
+- platform: state
+  entity_id: !input motion_sensor
+  to: 'on'
+  id: idMotionOnTimed
+  for:
+    seconds: 1
+- platform: state
+  entity_id: !input motion_sensor
+  to: 'off'
+  id: idMotionOff
+  for:
+    seconds: !input delay
+- platform: numeric_state
+  entity_id: !input lumen_sensor
+  below: !input lumen_threshold
+  id: idLumen
 
 variables:
   var_disabled: !input disabled
   var_target_light: !input target_light
-  var_target_light_first_id: >-
+  var_target_light_first_id: |
     {% if var_target_light.entity_id is string %}
-      {{var_target_light.entity_id}}
+      {{ var_target_light.entity_id }}
     {% else %}
-      {{var_target_light.entity_id[0]}}
-    {% endif %}
+      {{ var_target_light.entity_id[0] }}
+    {% endif %}"
   var_lumen_sensor: !input lumen_sensor
   var_lumen_threshold: !input lumen_threshold
   var_use_alternative_brightness: !input use_alternative_brightness
@@ -119,67 +125,65 @@ variables:
   var_disable_alternative_brightness: !input disable_alternative_brightness
 
 condition:
-  - condition: template
-    value_template: "{{not var_disabled or is_state(var_disabled, 'off')}}"
-  - condition: or
+- condition: template
+  value_template: '{{ not var_disabled or is_state(var_disabled, ''off'') }}'
+- condition: or
+  conditions:
+  - condition: trigger
+    id: idMotionOff
+  - condition: and
     conditions:
-      - condition: trigger
-        id: idMotionOff
-      - condition: and
-        conditions:
-          - condition: trigger
-            id: idMotionOn
-          - condition: or
-            conditions:
-              - condition: template
-                value_template: "{{(as_timestamp(utcnow()) - as_timestamp(states[var_target_light_first_id].last_changed)) < 1000}}"
-              - condition: template
-                value_template: "{{not var_lumen_sensor or states(var_lumen_sensor) | int <= var_lumen_threshold | int}}"
-      - condition: and
-        conditions:
-          - condition: trigger
-            id: idLumen
-          - condition: state
-            entity_id: !input motion_sensor
-            state: "on"
-          - condition: template
-            value_template: "{{states[var_target_light_first_id] == 'off'}}"
-          - condition: template
-            value_template: "{{not not var_lumen_sensor and states(var_lumen_sensor) | int <= var_lumen_threshold | int}}"
-      - condition: and
-        conditions:
-          - condition: trigger
-            id: idMotionOnTimed
-          - condition: template
-            value_template: "{{states[var_target_light_first_id] == 'off'}}"
-
+    - condition: trigger
+      id: idMotionOn
+    - condition: or
+      conditions:
+      - condition: template
+        value_template: '{{ (as_timestamp(utcnow()) - as_timestamp(states[var_target_light_first_id].last_changed)) < 1000 }}'
+      - condition: template
+        value_template: '{{ not var_lumen_sensor or states(var_lumen_sensor) | int <= var_lumen_threshold | int }}'
+  - condition: and
+    conditions:
+    - condition: trigger
+      id: idLumen
+    - condition: state
+      entity_id: !input motion_sensor
+      state: 'on'
+    - condition: template
+      value_template: "{{ states[var_target_light_first_id] == 'off' }}"
+    - condition: template
+      value_template: '{{ not not var_lumen_sensor and states(var_lumen_sensor) | int <= var_lumen_threshold | int }}'
+  - condition: and
+    conditions:
+    - condition: trigger
+      id: idMotionOnTimed
+    - condition: template
+      value_template: "{{ states[var_target_light_first_id] == 'off' }}"
 action:
-  - choose:
-      - conditions:
-          - condition: trigger
-            id: "idMotionOff"
-        sequence:
-          - service: light.turn_off
-            target: !input target_light
-      - conditions:
-          - condition: or
-            conditions:
-              - condition: trigger
-                id: "idLumen"
-              - condition: trigger
-                id: "idMotionOn"
-              - condition: trigger
-                id: "idMotionOnTimed"
-        sequence:
-          - service: light.turn_on
-            target: !input target_light
-            data:
-              brightness_pct: >
-                {% if (not var_disable_alternative_brightness or is_state(var_disable_alternative_brightness, 'off')) and var_alternative_brightness and var_use_alternative_brightness and states(var_use_alternative_brightness) == 'on' %}
-                  {{var_alternative_brightness}}
-                {% else %}
-                  100
-                {% endif %}
-
+- choose:
+  - conditions:
+    - condition: trigger
+      id: idMotionOff
+    sequence:
+    - service: light.turn_off
+      target: !input target_light
+  - conditions:
+    - condition: or
+      conditions:
+      - condition: trigger
+        id: idLumen
+      - condition: trigger
+        id: idMotionOn
+      - condition: trigger
+        id: idMotionOnTimed
+    sequence:
+    - service: light.turn_on
+      target: !input target_light
+      data:
+        brightness_pct: |
+          {% if ( not var_disable_alternative_brightness or is_state(var_disable_alternative_brightness, 'off')) and var_alternative_brightness and var_use_alternative_brightness and states(var_use_alternative_brightness) == 'on' %}
+            {{ var_alternative_brightness }}
+          {% else %}
+            100
+          {% endif %}
 mode: queued
 max_exceeded: silent
