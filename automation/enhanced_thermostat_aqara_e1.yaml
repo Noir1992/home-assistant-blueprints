@@ -4,7 +4,6 @@ blueprint:
   domain: automation
   author: Noir1992
   source_url: https://github.com/Noir1992/home-assistant-blueprints/blob/main/automation/enhanced_thermostat_aqara_e1.yaml
-
   input:
     target_trvs:
       name: Thermostats
@@ -32,7 +31,9 @@ blueprint:
         at the thermostats.
       default: /5
       selector:
-        text: {}
+        text:
+          multiple: false
+          multiline: false
     target_temp:
       name: Target temperature
       description: The input to control the target temperature.
@@ -117,7 +118,6 @@ blueprint:
           unit_of_measurement: seconds
           step: 1.0
           mode: slider
-
 variables:
   external_temp_sensor: !input external_temp_sensor
   external_temp_update_interval: !input external_temp_update_interval
@@ -125,10 +125,14 @@ variables:
   eco_mode_activated: !input eco_mode_activated
   eco_temp: !input eco_temp
   window_sensors: !input window_sensors
-  are_windows_open: "{{ (window_sensors | select('is_state', 'on') | list | count) > 0 }}"
+  are_windows_open:
+    "{{ (window_sensors | select('is_state', 'on') | list | count)
+    > 0 }}"
   outdoor_temp_sensor: !input outdoor_temp_sensor
   outdoor_tempt_threshold: !input outdoor_tempt_threshold
-  is_temp_outside_below: "{{ (states(outdoor_temp_sensor) | float) <= outdoor_tempt_threshold }}"
+  is_temp_outside_below:
+    "{{ (states(outdoor_temp_sensor) | float) <= outdoor_tempt_threshold
+    }}"
   are_thermostats_on: "{{ not are_windows_open and is_temp_outside_below }}"
 trigger:
   - platform: time_pattern
@@ -209,16 +213,25 @@ condition:
           - condition: template
             value_template: "{{ are_thermostats_on }}"
       - alias:
-          Update thermostat state on window status change if the outside temperature
+          Update thermostat state on window opening if the outside temperature
           is below threshold
         condition: and
         conditions:
           - condition: trigger
             id:
               - idWindowOn
+          - condition: template
+            value_template: "{{ are_windows_open and is_temp_outside_below }}"
+      - alias:
+          Update thermostat state on window closing if the outside temperature
+          is below threshold
+        condition: and
+        conditions:
+          - condition: trigger
+            id:
               - idWindowOff
           - condition: template
-            value_template: "{{ is_temp_outside_below }}"
+            value_template: "{{ not are_windows_open and is_temp_outside_below }}"
       - alias:
           Disable thermostat if outside temperature is above threshold and thermostat
           is on
@@ -237,7 +250,6 @@ condition:
             id: idBelowOutdoorTempThreshold
           - condition: template
             value_template: "{{ not are_thermostats_on }}"
-
 action:
   - if:
       - condition: or
@@ -258,8 +270,12 @@ action:
           for_each: !input target_trvs
           sequence:
             - variables:
-                trv_temp_sensor_id: "{{ repeat.item | replace('climate.', 'select.') + '_sensor' }}"
-                trv_external_temp_id: "{{ repeat.item | replace('climate.', 'number.') + '_external_temperature_input' }}"
+                trv_temp_sensor_id:
+                  "{{ repeat.item | replace('climate.', 'select.')
+                  + '_sensor' }}"
+                trv_external_temp_id:
+                  "{{ repeat.item | replace('climate.', 'number.')
+                  + '_external_temperature_input' }}"
             - if:
                 - condition: template
                   value_template: "{{ not is_state(trv_temp_sensor_id, 'external') }}"
@@ -288,12 +304,9 @@ action:
         target:
           entity_id: !input target_trvs
         data:
-          temperature: |
-            {% if states(eco_mode_activated) == 'on' %}
-              {{ states(eco_temp) }}
-            {% else %}
-              {{ states(target_temp) }}
-            {% endif %}
+          temperature:
+            "{% if states(eco_mode_activated) == 'on' %}\n  {{ states(eco_temp)
+            }}\n{% else %}\n  {{ states(target_temp) }}\n{% endif %}\n"
   - choose:
       - conditions:
           - condition: trigger
