@@ -4,7 +4,6 @@ blueprint:
   domain: automation
   author: Noir1992
   source_url: https://github.com/Noir1992/home-assistant-blueprints/blob/main/automation/enhanced_motion_light.yaml
-
   input:
     motion_sensor:
       name: Motion sensor
@@ -12,15 +11,19 @@ blueprint:
       selector:
         entity:
           filter:
-          - domain: binary_sensor
-            device_class: motion
+          - domain:
+            - binary_sensor
+            device_class:
+            - motion
+          multiple: false
     target_light:
       name: Light
       description: The light to use for the automation.
       selector:
         target:
           entity:
-          - domain: light
+          - domain:
+            - light
     lumen_sensor:
       name: Lumen sensor
       description: The lumen sensor to use for the automation. (optional)
@@ -28,10 +31,13 @@ blueprint:
       selector:
         entity:
           filter:
-          - domain: sensor
+          - domain:
+            - sensor
+          multiple: false
     lumen_threshold:
       name: Lumen threshold
-      description: The light will only be turned on if the lumen value is smaller. (This only applies if a lumen sensor is specified)
+      description: The light will only be turned on if the lumen value is smaller.
+        (This only applies if a lumen sensor is specified)
       default: 8
       selector:
         number:
@@ -42,7 +48,8 @@ blueprint:
           mode: box
     delay:
       name: Delay
-      description: The delay before the light will get turned off after no motion is detected anymore.
+      description: The delay before the light will get turned off after no motion
+        is detected anymore.
       default: 0
       selector:
         number:
@@ -64,7 +71,8 @@ blueprint:
           step: 1.0
     use_alternative_brightness:
       name: Use alternative brightness
-      description: Boolean value to indicate if the alternative brightness should be used. (optional)
+      description: Boolean value to indicate if the alternative brightness should
+        be used. (optional)
       default:
       selector:
         entity:
@@ -72,6 +80,7 @@ blueprint:
           - domain:
             - input_boolean
             - binary_sensor
+          multiple: false
     disable_alternative_brightness:
       name: Disable alternative brightness
       description: Boolean input to disable the alternative brightness. (optional)
@@ -79,25 +88,23 @@ blueprint:
       selector:
         entity:
           filter:
-          - domain: input_boolean
+          - domain:
+            - input_boolean
+          multiple: false
     disabled:
       name: Disabled
-      description: Boolean input to disable the automation (eg. prevent automation if no one is home). (optional)
+      description: Boolean input to disable the automation (eg. prevent automation
+        if no one is home). (optional)
       default:
       selector:
-        entity: {}
+        entity:
+          multiple: false
 
 trigger:
 - platform: state
   entity_id: !input motion_sensor
   to: 'on'
   id: idMotionOn
-- platform: state
-  entity_id: !input motion_sensor
-  to: 'on'
-  id: idMotionOnTimed
-  for:
-    seconds: 1
 - platform: state
   entity_id: !input motion_sensor
   to: 'off'
@@ -117,7 +124,7 @@ variables:
       {{ var_target_light.entity_id }}
     {% else %}
       {{ var_target_light.entity_id[0] }}
-    {% endif %}"
+    {% endif %}
   var_lumen_sensor: !input lumen_sensor
   var_lumen_threshold: !input lumen_threshold
   var_use_alternative_brightness: !input use_alternative_brightness
@@ -126,7 +133,7 @@ variables:
 
 condition:
 - condition: template
-  value_template: '{{ not var_disabled or is_state(var_disabled, ''off'') }}'
+  value_template: "{{ not var_disabled or is_state(var_disabled, 'off') }}"
 - condition: or
   conditions:
   - condition: trigger
@@ -135,12 +142,8 @@ condition:
     conditions:
     - condition: trigger
       id: idMotionOn
-    - condition: or
-      conditions:
-      - condition: template
-        value_template: '{{ (as_timestamp(utcnow()) - as_timestamp(states[var_target_light_first_id].last_changed)) < 1000 }}'
-      - condition: template
-        value_template: '{{ not var_lumen_sensor or states(var_lumen_sensor) | int <= var_lumen_threshold | int }}'
+    - condition: template
+      value_template: '{{ not var_lumen_sensor or states(var_lumen_sensor) | int <= var_lumen_threshold | int }}'
   - condition: and
     conditions:
     - condition: trigger
@@ -148,16 +151,7 @@ condition:
     - condition: state
       entity_id: !input motion_sensor
       state: 'on'
-    - condition: template
-      value_template: "{{ states[var_target_light_first_id] == 'off' }}"
-    - condition: template
-      value_template: '{{ not not var_lumen_sensor and states(var_lumen_sensor) | int <= var_lumen_threshold | int }}'
-  - condition: and
-    conditions:
-    - condition: trigger
-      id: idMotionOnTimed
-    - condition: template
-      value_template: "{{ states[var_target_light_first_id] == 'off' }}"
+
 action:
 - choose:
   - conditions:
@@ -167,14 +161,10 @@ action:
     - service: light.turn_off
       target: !input target_light
   - conditions:
-    - condition: or
-      conditions:
-      - condition: trigger
-        id: idLumen
-      - condition: trigger
-        id: idMotionOn
-      - condition: trigger
-        id: idMotionOnTimed
+    - condition: trigger
+      id:
+        - idLumen
+        - idMotionOn
     sequence:
     - service: light.turn_on
       target: !input target_light
