@@ -231,7 +231,7 @@ condition:
             id:
               - idWindowOff
           - condition: template
-            value_template: "{{ is_temp_outside_below }}"
+            value_template: "{{ not are_windows_open and is_temp_outside_below }}"
       - alias:
           Disable thermostat if outside temperature is above threshold and thermostat
           is on
@@ -241,8 +241,9 @@ condition:
             id: idAboveOutdoorTempThreshold
           - condition: template
             value_template: "{{ not are_windows_open }}"
-      - alias: Enable thermostat if outside temperature is below threshold and
-          windows are closed
+      - alias:
+          Enable thermostat if outside temperature is below threshold and windows
+          are closed
         condition: and
         conditions:
           - condition: trigger
