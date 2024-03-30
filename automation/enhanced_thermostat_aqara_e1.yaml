@@ -259,24 +259,24 @@ action:
             + ''_external_temperature_input'' }}'
       - if:
         - condition: template
-          value_template: "{{ is_state(repeat.item, 'heat') }}"
+          value_template: '{{ is_state(repeat.item, ''heat'') }}'
         then:
-          - if:
-            - condition: template
-              value_template: '{{ not is_state(trv_temp_sensor_id, ''external'') }}'
-            then:
-            - service: select.select_option
-              target:
-                entity_id: '{{trv_temp_sensor_id}}'
-              data:
-                option: external
-            - delay:
-                seconds: 10
-          - service: number.set_value
-            data:
-              value: '{{ states(external_temp_sensor) | float(0) | round(1) }}'
+        - if:
+          - condition: template
+            value_template: '{{ not is_state(trv_temp_sensor_id, ''external'') }}'
+          then:
+          - service: select.select_option
             target:
-              entity_id: '{{ trv_external_temp_id }}'
+              entity_id: '{{trv_temp_sensor_id}}'
+            data:
+              option: external
+          - delay:
+              seconds: 10
+        - service: number.set_value
+          data:
+            value: '{{ states(external_temp_sensor) | float(0) | round(1) }}'
+          target:
+            entity_id: '{{ trv_external_temp_id }}'
 - alias: Set target temperature of thermostats
   if:
   - condition: trigger
