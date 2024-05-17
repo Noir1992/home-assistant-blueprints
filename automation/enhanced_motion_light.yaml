@@ -15,6 +15,7 @@ blueprint:
             - binary_sensor
             device_class:
             - motion
+            - occupancy
           multiple: true
     target_light:
       name: Light
@@ -161,20 +162,27 @@ action:
     target_light: !input target_light
     alternative_brightness_target_light: !input alternative_brightness_target_light
     use_alternative_brightness: !input use_alternative_brightness
-    alternative_brightness_enabled: '{{ use_alternative_brightness and states(use_alternative_brightness) == ''on'' }}'
-    use_alternative_lights: '{{ alternative_brightness_enabled and alternative_brightness_target_light != {} }}'
-    target_light_ids: "{{ target_light.entity_id is string | iif([target_light.entity_id], target_light.entity_id) }}"
-    alternative_brightness_target_light_ids: "{{ alternative_brightness_target_light.entity_id is string | iif([alternative_brightness_target_light.entity_id], alternative_brightness_target_light.entity_id) }}"
-    wait_for_state: "{{ trigger.id == 'idMotionOff' | iif('off', 'on') }}"
-    light_ids: "{{ use_alternative_lights | iif(alternative_brightness_target_light_ids, target_light_ids) }}"
+    alternative_brightness_enabled: '{{ use_alternative_brightness and states(use_alternative_brightness)
+      == ''on'' }}'
+    use_alternative_lights: '{{ alternative_brightness_enabled and alternative_brightness_target_light
+      != {} }}'
+    target_light_ids: '{{ target_light.entity_id is string | iif([target_light.entity_id],
+      target_light.entity_id) }}'
+    alternative_brightness_target_light_ids: '{{ alternative_brightness_target_light.entity_id
+      is string | iif([alternative_brightness_target_light.entity_id], alternative_brightness_target_light.entity_id)
+      }}'
+    wait_for_state: '{{ trigger.id == ''idMotionOff'' | iif(''off'', ''on'') }}'
+    light_ids: '{{ use_alternative_lights | iif(alternative_brightness_target_light_ids,
+      target_light_ids) }}'
 - choose:
   - conditions:
     - condition: trigger
       id: idMotionOff
     sequence:
     - service: light.turn_off
-      target: 
-        entity_id: "{{ target_light_ids + alternative_brightness_target_light_ids | unique | list }}"
+      target:
+        entity_id: '{{ target_light_ids + alternative_brightness_target_light_ids
+          | unique | list }}'
   - conditions:
     - condition: trigger
       id:
@@ -185,11 +193,13 @@ action:
         brightness: !input brightness
         alternative_brightness: !input alternative_brightness
     - service: light.turn_on
-      target: 
-        entity_id: "{{ light_ids }}"
+      target:
+        entity_id: '{{ light_ids }}'
       data:
-        brightness_pct: "{{ alternative_brightness_enabled | iif(alternative_brightness, brightness) }}"
-- wait_template: "{{ (states.light | selectattr('entity_id', 'in', light_ids) | rejectattr('state', 'eq', wait_for_state) | list | count) == 0 }}"
+        brightness_pct: '{{ alternative_brightness_enabled | iif(alternative_brightness,
+          brightness) }}'
+- wait_template: '{{ (states.light | selectattr(''entity_id'', ''in'', light_ids)
+    | rejectattr(''state'', ''eq'', wait_for_state) | list | count) == 0 }}'
   continue_on_timeout: true
   timeout: '5'
 mode: queued
