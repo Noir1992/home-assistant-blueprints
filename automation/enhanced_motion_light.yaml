@@ -131,6 +131,21 @@ variables:
   motion_sensor: !input motion_sensor
   lumen_sensor: !input lumen_sensor
   lumen_threshold: !input lumen_threshold
+  target_light: !input target_light
+  alternative_brightness_target_light: !input alternative_brightness_target_light
+  use_alternative_brightness: !input use_alternative_brightness
+  alternative_brightness_enabled: '{{ use_alternative_brightness and states(use_alternative_brightness)
+    == ''on'' }}'
+  use_alternative_lights: '{{ alternative_brightness_enabled and alternative_brightness_target_light
+    != {} }}'
+  target_light_ids: '{{ target_light.entity_id is string | iif([target_light.entity_id],
+    target_light.entity_id) }}'
+  alternative_brightness_target_light_ids: '{{ alternative_brightness_target_light.entity_id
+    is string | iif([alternative_brightness_target_light.entity_id], alternative_brightness_target_light.entity_id)
+    }}'
+  wait_for_state: '{{ trigger.id == ''idMotionOff'' | iif(''off'', ''on'') }}'
+  light_ids: '{{ use_alternative_lights | iif(alternative_brightness_target_light_ids,
+    target_light_ids) }}'
 condition:
 - condition: template
   value_template: '{{ not disabled or is_state(disabled, ''off'') }}'
@@ -157,23 +172,12 @@ condition:
     - condition: state
       entity_id: !input motion_sensor
       state: 'on'
+    - condition: template
+      value_template: |-
+        {% set temp_var_lights = expand(light_ids) %}
+        {% set temp_var_matching_lights = temp_var_lights | selectattr('state', 'eq', 'off') | selectattr('last_changed', 'lt', now() - timedelta(seconds=5)) | list %}
+        {{ (temp_var_lights | length) == (temp_var_matching_lights | length) }}
 action:
-- variables:
-    target_light: !input target_light
-    alternative_brightness_target_light: !input alternative_brightness_target_light
-    use_alternative_brightness: !input use_alternative_brightness
-    alternative_brightness_enabled: '{{ use_alternative_brightness and states(use_alternative_brightness)
-      == ''on'' }}'
-    use_alternative_lights: '{{ alternative_brightness_enabled and alternative_brightness_target_light
-      != {} }}'
-    target_light_ids: '{{ target_light.entity_id is string | iif([target_light.entity_id],
-      target_light.entity_id) }}'
-    alternative_brightness_target_light_ids: '{{ alternative_brightness_target_light.entity_id
-      is string | iif([alternative_brightness_target_light.entity_id], alternative_brightness_target_light.entity_id)
-      }}'
-    wait_for_state: '{{ trigger.id == ''idMotionOff'' | iif(''off'', ''on'') }}'
-    light_ids: '{{ use_alternative_lights | iif(alternative_brightness_target_light_ids,
-      target_light_ids) }}'
 - choose:
   - conditions:
     - condition: trigger
