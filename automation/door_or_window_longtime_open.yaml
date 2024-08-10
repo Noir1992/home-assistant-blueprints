@@ -3,7 +3,6 @@ blueprint:
   description: Triggers when the given door/window sensor is open for a long time.
   domain: automation
   author: Noir1992
-
   input:
     sensor:
       name: Door/window sensor
@@ -11,49 +10,51 @@ blueprint:
       selector:
         entity:
           filter:
-            domain: binary_sensor
+          - domain:
+            - binary_sensor
+          multiple: false
     thershold:
       name: Threshold
-      description: The time in seconds that the sensor has to be open for the automation to trigger.
+      description: The time in seconds that the sensor has to be open for the automation
+        to trigger.
       selector:
         number:
-          min: 0
-          max: 7200
+          min: 0.0
+          max: 7200.0
           unit_of_measurement: seconds
+          mode: slider
+          step: 1.0
       default: 60
     actions:
       name: Actions
       description: Notifications or similar to be run.
       selector:
         action: {}
-
+  source_url: https://github.com/Noir1992/home-assistant-blueprints/blob/main/automation/door_or_window_longtime_open.yaml
 trigger:
-  - platform: state
-    entity_id: !input sensor
-    to: "on"
-    for:
-      seconds: !input thershold
-  - platform: state
-    entity_id: !input sensor
-    to: "off"
-
+- platform: state
+  entity_id: !input sensor
+  to: 'on'
+  for:
+    seconds: !input thershold
+- platform: state
+  entity_id: !input sensor
+  to: 'off'
 variables:
   var_threshold: !input thershold
-
 condition:
-  - condition: or
+- condition: or
+  conditions:
+  - condition: state
+    entity_id: !input sensor
+    state: 'on'
+  - condition: and
     conditions:
-      - condition: state
-        entity_id: !input sensor
-        state: "on"
-      - condition: and
-        conditions:
-          - condition: state
-            entity_id: !input sensor
-            state: "off"
-          - condition: template
-            value_template: "{{ trigger.from_state.last_changed < now() - timedelta(seconds=var_threshold) }}"
-
+    - condition: state
+      entity_id: !input sensor
+      state: 'off'
+    - condition: template
+      value_template: '{{ trigger.from_state.last_changed < now() - timedelta(seconds=var_threshold)
+        }}'
 action: !input actions
-
 mode: single
