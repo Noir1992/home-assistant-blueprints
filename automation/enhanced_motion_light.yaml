@@ -107,7 +107,7 @@ blueprint:
       name: Disabled
       description: Boolean input to disable the automation (eg. prevent automation
         if no one is home). (optional)
-      default:
+      default: {}
       selector:
         entity:
           multiple: false
@@ -126,6 +126,10 @@ trigger:
   entity_id: !input lumen_sensor
   below: !input lumen_threshold
   id: idLumen
+- platform: state
+  entity_id: !input disabled
+  to: 'off'
+  id: idDisabledOff
 variables:
   disabled: !input disabled
   motion_sensor: !input motion_sensor
@@ -146,44 +150,57 @@ variables:
   wait_for_state: '{{ trigger.id == ''idMotionOff'' | iif(''off'', ''on'') }}'
   light_ids: '{{ use_alternative_lights | iif(alternative_brightness_target_light_ids,
     target_light_ids) }}'
+  all_motion_sensors_off: '{{ expand(motion_sensor) | selectattr(''state'', ''eq'', ''on'')
+        | list | count == 0 }}'
 condition:
-- condition: template
-  value_template: '{{ not disabled or is_state(disabled, ''off'') }}'
 - condition: or
   conditions:
   - condition: and
     conditions:
     - condition: trigger
-      id: idMotionOff
+      id: idDisabledOff
     - condition: template
-      value_template: '{{ expand(motion_sensor) | selectattr(''state'', ''eq'', ''on'')
-        | list | count == 0 }}'
+      value_template: '{{ all_motion_sensors_off }}'
   - condition: and
     conditions:
-    - condition: trigger
-      id: idMotionOn
     - condition: template
-      value_template: '{{ not lumen_sensor or states(lumen_sensor) | int <= lumen_threshold
-        | int }}'
-  - condition: and
-    conditions:
-    - condition: trigger
-      id: idLumen
-    - condition: state
-      entity_id: !input motion_sensor
-      state: 'on'
-    - condition: template
-      value_template: |-
-        {% set temp_var_lights = expand(light_ids) %}
-        {% set temp_var_matching_lights = temp_var_lights | selectattr('state', 'eq', 'off') | selectattr('last_changed', 'lt', now() - timedelta(seconds=5)) | list %}
-        {{ (temp_var_lights | length) == (temp_var_matching_lights | length) }}
+      value_template: '{{ not disabled or is_state(disabled, ''off'') }}'
+    - condition: or
+      conditions:
+      - condition: and
+        conditions:
+        - condition: trigger
+          id: idMotionOff
+        - condition: template
+          value_template: '{{ all_motion_sensors_off }}'
+      - condition: and
+        conditions:
+        - condition: trigger
+          id: idMotionOn
+        - condition: template
+          value_template: '{{ not lumen_sensor or states(lumen_sensor) | int <= lumen_threshold
+            | int or (as_timestamp(utcnow()) - as_timestamp(this.attributes.last_triggered)) | round(0) < 5 }}'
+      - condition: and
+        conditions:
+        - condition: trigger
+          id: idLumen
+        - condition: state
+          entity_id: !input motion_sensor
+          state: 'on'
+        - condition: template
+          value_template: |-
+            {% set temp_var_lights = expand(light_ids) %}
+            {% set temp_var_matching_lights = temp_var_lights | selectattr('state', 'eq', 'off') | selectattr('last_changed', 'lt', now() - timedelta(seconds=5)) | list %}
+            {{ (temp_var_lights | length) == (temp_var_matching_lights | length) }}
 action:
 - choose:
   - conditions:
     - condition: trigger
-      id: idMotionOff
+      id: 
+        - idMotionOff
+        - idDisabledOff
     sequence:
-    - service: light.turn_off
+    - action: light.turn_off
       target:
         entity_id: '{{ target_light_ids + alternative_brightness_target_light_ids
           | unique | list }}'
@@ -196,15 +213,11 @@ action:
     - variables:
         brightness: !input brightness
         alternative_brightness: !input alternative_brightness
-    - service: light.turn_on
+    - action: light.turn_on
       target:
         entity_id: '{{ light_ids }}'
       data:
         brightness_pct: '{{ alternative_brightness_enabled | iif(alternative_brightness,
           brightness) }}'
-- wait_template: '{{ (states.light | selectattr(''entity_id'', ''in'', light_ids)
-    | rejectattr(''state'', ''eq'', wait_for_state) | list | count) == 0 }}'
-  continue_on_timeout: true
-  timeout: '5'
 mode: queued
 max_exceeded: silent
