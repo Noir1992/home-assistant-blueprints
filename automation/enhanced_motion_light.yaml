@@ -112,21 +112,21 @@ blueprint:
         entity:
           multiple: false
 trigger:
-- platform: state
+- trigger: state
   entity_id: !input motion_sensor
   to: 'on'
   id: idMotionOn
-- platform: state
+- trigger: state
   entity_id: !input motion_sensor
   to: 'off'
   id: idMotionOff
   for:
     seconds: !input delay
-- platform: numeric_state
+- trigger: numeric_state
   entity_id: !input lumen_sensor
   below: !input lumen_threshold
   id: idLumen
-- platform: state
+- trigger: state
   entity_id: !input disabled
   to: 'off'
   id: idDisabledOff
