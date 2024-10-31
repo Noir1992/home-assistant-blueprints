@@ -10,8 +10,9 @@ blueprint:
       description: The Aqara E1 thermostats.
       selector:
         entity:
-          domain:
-          - climate
+          filter:
+            domain:
+            - climate
           multiple: true
     external_temp_sensor:
       name: External temperature sensor
@@ -67,9 +68,10 @@ blueprint:
       default: []
       selector:
         entity:
-          domain:
-          - binary_sensor
-          - input_boolean
+          filter:
+            domain:
+            - binary_sensor
+            - input_boolean
           multiple: true
     outdoor_temp_sensor:
       name: Outdoor temperature sensor
@@ -129,37 +131,37 @@ variables:
   is_temp_outside_below: '{{ (states(outdoor_temp_sensor) | float) <= outdoor_tempt_threshold }}'
   are_thermostats_on: '{{ all_windows_closed and is_temp_outside_below }}'
 trigger:
-- platform: time_pattern
+- trigger: time_pattern
   minutes: !input external_temp_update_interval
   id: idExternalTempInterval
-- platform: state
+- trigger: state
   entity_id: !input target_temp
   id: idTargetTempChange
-- platform: state
+- trigger: state
   entity_id: !input eco_temp
   id: idEcoTempChange
-- platform: state
+- trigger: state
   entity_id: !input eco_mode_activated
   id: idEcoModeChanged
-- platform: state
+- trigger: state
   entity_id: !input window_sensors
   to: 'on'
   for:
     seconds: !input disable_delay
   id: idWindowOn
-- platform: state
+- trigger: state
   entity_id: !input window_sensors
   to: 'off'
   for:
     seconds: !input enable_delay
   id: idWindowOff
-- platform: numeric_state
+- trigger: numeric_state
   entity_id: !input outdoor_temp_sensor
   above: !input outdoor_tempt_threshold
   for:
     seconds: !input disable_delay
   id: idAboveOutdoorTempThreshold
-- platform: numeric_state
+- trigger: numeric_state
   entity_id: !input outdoor_temp_sensor
   below: !input outdoor_tempt_threshold
   for:
