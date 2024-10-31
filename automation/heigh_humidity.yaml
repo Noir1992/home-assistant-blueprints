@@ -69,7 +69,7 @@ blueprint:
         action: {}
   source_url: https://github.com/Noir1992/home-assistant-blueprints/blob/main/automation/heigh_humidity.yaml
 trigger:
-- platform: numeric_state
+- trigger: numeric_state
   entity_id: !input humidity_sensor
   above: !input thershold
   for:
@@ -85,7 +85,7 @@ action:
     value_template: '{{ true }}'
   then: !input actions
 - wait_for_trigger:
-    platform: numeric_state
+    trigger: numeric_state
     entity_id: !input humidity_sensor
     below: !input reset_value
 mode: single
