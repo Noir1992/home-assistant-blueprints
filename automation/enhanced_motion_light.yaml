@@ -74,14 +74,14 @@ blueprint:
       name: Use alternative brightness
       description: Boolean value to indicate if the alternative brightness should
         be used. (optional)
-      default:
+      default: []
       selector:
         entity:
           filter:
           - domain:
             - input_boolean
             - binary_sensor
-          multiple: false
+          multiple: true
     alternative_brightness_target_light:
       name: Alternative brightness Light
       description: The lights to use when alternative brightness is enabled. If none
@@ -107,10 +107,10 @@ blueprint:
       name: Disabled
       description: Boolean input to disable the automation (eg. prevent automation
         if no one is home). (optional)
-      default: {}
+      default: []
       selector:
         entity:
-          multiple: false
+          multiple: true
 trigger:
 - trigger: state
   entity_id: !input motion_sensor
@@ -138,8 +138,8 @@ variables:
   target_light: !input target_light
   alternative_brightness_target_light: !input alternative_brightness_target_light
   use_alternative_brightness: !input use_alternative_brightness
-  alternative_brightness_enabled: '{{ use_alternative_brightness and states(use_alternative_brightness)
-    == ''on'' }}'
+  alternative_brightness_enabled: '{{ expand(use_alternative_brightness) | selectattr(''state'', ''eq'',
+    ''on'') | list | count > 0 }}'
   use_alternative_lights: '{{ alternative_brightness_enabled and alternative_brightness_target_light
     != {} }}'
   target_light_ids: '{{ target_light.entity_id is string | iif([target_light.entity_id],
@@ -150,8 +150,8 @@ variables:
   wait_for_state: '{{ trigger.id == ''idMotionOff'' | iif(''off'', ''on'') }}'
   light_ids: '{{ use_alternative_lights | iif(alternative_brightness_target_light_ids,
     target_light_ids) }}'
-  all_motion_sensors_off: '{{ expand(motion_sensor) | selectattr(''state'', ''eq'', ''on'')
-        | list | count == 0 }}'
+  all_motion_sensors_off: '{{ expand(motion_sensor) | selectattr(''state'', ''eq'',
+    ''on'') | list | count == 0 }}'
 condition:
 - condition: or
   conditions:
@@ -164,7 +164,8 @@ condition:
   - condition: and
     conditions:
     - condition: template
-      value_template: '{{ not disabled or is_state(disabled, ''off'') }}'
+      value_template: '{{ expand(disabled) | selectattr(''state'', ''eq'',
+    ''on'') | list | count == 0 }}'
     - condition: or
       conditions:
       - condition: and
@@ -179,7 +180,8 @@ condition:
           id: idMotionOn
         - condition: template
           value_template: '{{ not lumen_sensor or states(lumen_sensor) | int <= lumen_threshold
-            | int or (as_timestamp(utcnow()) - as_timestamp(this.attributes.last_triggered)) | round(0) < 5 }}'
+            | int or (as_timestamp(utcnow()) - as_timestamp(this.attributes.last_triggered))
+            | round(0) < 5 }}'
       - condition: and
         conditions:
         - condition: trigger
@@ -188,17 +190,20 @@ condition:
           entity_id: !input motion_sensor
           state: 'on'
         - condition: template
-          value_template: |-
-            {% set temp_var_lights = expand(light_ids) %}
-            {% set temp_var_matching_lights = temp_var_lights | selectattr('state', 'eq', 'off') | selectattr('last_changed', 'lt', now() - timedelta(seconds=5)) | list %}
-            {{ (temp_var_lights | length) == (temp_var_matching_lights | length) }}
+          value_template: '{% set temp_var_lights = expand(light_ids) %}
+
+            {% set temp_var_matching_lights = temp_var_lights | selectattr(''state'',
+            ''eq'', ''off'') | selectattr(''last_changed'', ''lt'', now() - timedelta(seconds=5))
+            | list %}
+
+            {{ (temp_var_lights | length) == (temp_var_matching_lights | length) }}'
 action:
 - choose:
   - conditions:
     - condition: trigger
-      id: 
-        - idMotionOff
-        - idDisabledOff
+      id:
+      - idMotionOff
+      - idDisabledOff
     sequence:
     - action: light.turn_off
       target:
