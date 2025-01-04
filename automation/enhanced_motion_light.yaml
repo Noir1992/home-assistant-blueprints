@@ -28,7 +28,7 @@ blueprint:
     lumen_sensor:
       name: Lumen sensor
       description: The lumen sensor to use for the automation. (optional)
-      default: null
+      default:
       selector:
         entity:
           filter:
@@ -86,7 +86,7 @@ blueprint:
       name: Alternative brightness Light
       description: The lights to use when alternative brightness is enabled. If none
         is selected, the lights form the "Light" field above will be used. (optional)
-      default: null
+      default:
       selector:
         target:
           entity:
@@ -138,17 +138,20 @@ variables:
   target_light: !input target_light
   alternative_brightness_target_light: !input alternative_brightness_target_light
   use_alternative_brightness: !input use_alternative_brightness
-  alternative_brightness_enabled: '{{ expand(use_alternative_brightness) | selectattr(''state'', ''eq'',
-    ''on'') | list | count > 0 }}'
-  use_alternative_lights: '{{ alternative_brightness_enabled and alternative_brightness_target_light
-    != {} }}'
+  alternative_brightness_enabled: '{{ expand(use_alternative_brightness) | selectattr(''state'',
+    ''eq'', ''on'') | list | count > 0 }}'
   target_light_ids: '{{ target_light.entity_id is string | iif([target_light.entity_id],
     target_light.entity_id) }}'
-  alternative_brightness_target_light_ids: '{{ alternative_brightness_target_light.entity_id
-    is string | iif([alternative_brightness_target_light.entity_id], alternative_brightness_target_light.entity_id)
-    }}'
+  alternative_brightness_target_light_ids: |-
+    {% if alternative_brightness_target_light is none %}
+      {{ target_light_ids }}
+    {% elif alternative_brightness_target_light.entity_id is string %}
+      {{ [alternative_brightness_target_light.entity_id] }}
+    {% else %}
+      {{ alternative_brightness_target_light }}
+    {% endif %}
   wait_for_state: '{{ trigger.id == ''idMotionOff'' | iif(''off'', ''on'') }}'
-  light_ids: '{{ use_alternative_lights | iif(alternative_brightness_target_light_ids,
+  light_ids: '{{ alternative_brightness_enabled | iif(alternative_brightness_target_light_ids,
     target_light_ids) }}'
   all_motion_sensors_off: '{{ expand(motion_sensor) | selectattr(''state'', ''eq'',
     ''on'') | list | count == 0 }}'
@@ -164,8 +167,8 @@ condition:
   - condition: and
     conditions:
     - condition: template
-      value_template: '{{ expand(disabled) | selectattr(''state'', ''eq'',
-    ''on'') | list | count == 0 }}'
+      value_template: '{{ expand(disabled) | selectattr(''state'', ''eq'', ''on'')
+        | list | count == 0 }}'
     - condition: or
       conditions:
       - condition: and
