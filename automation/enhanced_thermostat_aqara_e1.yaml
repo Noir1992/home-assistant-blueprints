@@ -11,7 +11,7 @@ blueprint:
       selector:
         entity:
           filter:
-            domain:
+          - domain:
             - climate
           multiple: true
     external_temp_sensor:
@@ -69,7 +69,7 @@ blueprint:
       selector:
         entity:
           filter:
-            domain:
+          - domain:
             - binary_sensor
             - input_boolean
           multiple: true
@@ -96,9 +96,9 @@ blueprint:
           unit_of_measurement: °C
           step: 0.5
           mode: slider
-    enable_delay:
-      name: Enable delay
-      description: Delay before thermostats will be turned on.
+    window_close_delay:
+      name: Window close delay
+      description: Delay before thermostats will be turned on after a window is opened.
       default: 0
       selector:
         number:
@@ -107,9 +107,9 @@ blueprint:
           unit_of_measurement: seconds
           step: 1.0
           mode: slider
-    disable_delay:
-      name: Disable delay
-      description: Delay before thermostats will be turned off.
+    window_open_delay:
+      name: Window open delay
+      description: Delay before thermostats will be turned off after a window is opened.
       default: 0
       selector:
         number:
@@ -118,18 +118,34 @@ blueprint:
           unit_of_measurement: seconds
           step: 1.0
           mode: slider
+    turn_off_thermostates:
+      name: Turn off thermostates
+      description: Boolean value to turn off thermostats.
+      default: []
+      selector:
+        entity:
+          filter:
+          - domain:
+            - input_boolean
+            - binary_sensor
+          multiple: true
 variables:
+  turn_off_thermostates: !input turn_off_thermostates
   external_temp_sensor: !input external_temp_sensor
   external_temp_update_interval: !input external_temp_update_interval
   target_temp: !input target_temp
   eco_mode_activated: !input eco_mode_activated
   eco_temp: !input eco_temp
   window_sensors: !input window_sensors
-  all_windows_closed: '{{ (window_sensors | select(''is_state'', ''on'') | list | count) == 0 }}'
+  all_windows_closed: '{{ (window_sensors | select(''is_state'', ''on'') | list |
+    count) == 0 }}'
   outdoor_temp_sensor: !input outdoor_temp_sensor
   outdoor_tempt_threshold: !input outdoor_tempt_threshold
-  is_temp_outside_below: '{{ (states(outdoor_temp_sensor) | float) <= outdoor_tempt_threshold }}'
+  is_temp_outside_below: '{{ (states(outdoor_temp_sensor) | float) <= outdoor_tempt_threshold
+    }}'
   are_thermostats_on: '{{ all_windows_closed and is_temp_outside_below }}'
+  is_not_turn_off_thermostats: '{{ expand(turn_off_thermostates) | selectattr(''state'', ''eq'',
+    ''on'') | list | count == 0 }}'
 trigger:
 - trigger: time_pattern
   minutes: !input external_temp_update_interval
@@ -147,26 +163,30 @@ trigger:
   entity_id: !input window_sensors
   to: 'on'
   for:
-    seconds: !input disable_delay
+    seconds: !input window_open_delay
   id: idWindowOn
 - trigger: state
   entity_id: !input window_sensors
   to: 'off'
   for:
-    seconds: !input enable_delay
+    seconds: !input window_close_delay
   id: idWindowOff
 - trigger: numeric_state
   entity_id: !input outdoor_temp_sensor
   above: !input outdoor_tempt_threshold
-  for:
-    seconds: !input disable_delay
   id: idAboveOutdoorTempThreshold
 - trigger: numeric_state
   entity_id: !input outdoor_temp_sensor
   below: !input outdoor_tempt_threshold
-  for:
-    seconds: !input enable_delay
   id: idBelowOutdoorTempThreshold
+- trigger: state
+  entity_id: !input turn_off_thermostates
+  to: 'off'
+  id: idTurnOnThermostats
+- trigger: state
+  entity_id: !input turn_off_thermostates
+  to: 'on'
+  id: idTurnOffThermostats
 condition:
 - condition: or
   conditions:
@@ -219,23 +239,21 @@ condition:
       id:
       - idWindowOff
     - condition: template
-      value_template: '{{ all_windows_closed and is_temp_outside_below }}'
-  - alias: Disable thermostat if outside temperature is above threshold and thermostat
-      is on
+      value_template: '{{ all_windows_closed and is_temp_outside_below and is_not_turn_off_thermostats }}'
+  - alias: Disable thermostat if thermostat is on
+    condition: trigger
+    id: 
+      - idAboveOutdoorTempThreshold
+      - idTurnOffThermostats
+  - alias: Enable thermostat if windows are closed
     condition: and
     conditions:
     - condition: trigger
-      id: idAboveOutdoorTempThreshold
+      id: 
+        - idBelowOutdoorTempThreshold
+        - idTurnOnThermostats
     - condition: template
-      value_template: '{{ all_windows_closed }}'
-  - alias: Enable thermostat if outside temperature is below threshold and windows
-      are closed
-    condition: and
-    conditions:
-    - condition: trigger
-      id: idBelowOutdoorTempThreshold
-    - condition: template
-      value_template: '{{ all_windows_closed }}'
+      value_template: '{{ all_windows_closed and is_temp_outside_below and is_not_turn_off_thermostats }}'
 action:
 - if:
   - condition: or
@@ -272,24 +290,28 @@ action:
   - delay:
       seconds: 10
 - choose:
-  - alias: Turn off thermostats if a window opened or the outside temperature is above the threshold
+  - alias: Turn off thermostats if a window opened or the outside temperature is above
+      the threshold
     conditions:
     - condition: trigger
       id:
       - idWindowOn
       - idAboveOutdoorTempThreshold
+      - idTurnOffThermostats
     sequence:
     - action: climate.set_hvac_mode
       target:
         entity_id: !input target_trvs
       data:
         hvac_mode: 'off'
-  - alias: Turn on thermostats if all windows closed or the outside temperature falls below the threshold
+  - alias: Turn on thermostats if all windows closed or the outside temperature falls
+      below the threshold
     conditions:
     - condition: trigger
       id:
       - idWindowOff
       - idBelowOutdoorTempThreshold
+      - idTurnOnThermostats
     sequence:
     - action: climate.set_hvac_mode
       target:
@@ -307,11 +329,13 @@ action:
     - idEcoTempChange
     - idTargetTempChange
     - idBelowOutdoorTempThreshold
+    - idTurnOnThermostats
   then:
   - action: climate.set_temperature
     target:
       entity_id: !input target_trvs
     data:
-      temperature: "{{ is_state(eco_mode_activated, 'on') | iif(states(eco_temp), states(target_temp)) }}"
+      temperature: '{{ is_state(eco_mode_activated, ''on'') | iif(states(eco_temp),
+        states(target_temp)) }}'
 mode: queued
 max_exceeded: silent
