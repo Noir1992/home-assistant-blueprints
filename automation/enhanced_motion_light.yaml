@@ -28,7 +28,7 @@ blueprint:
     lumen_sensor:
       name: Lumen sensor
       description: The lumen sensor to use for the automation. (optional)
-      default: {}
+      default: null
       selector:
         entity:
           filter:
@@ -86,7 +86,7 @@ blueprint:
       name: Alternative brightness Light
       description: The lights to use when alternative brightness is enabled. If none
         is selected, the lights form the "Light" field above will be used. (optional)
-      default: {}
+      default: null
       selector:
         target:
           entity:
