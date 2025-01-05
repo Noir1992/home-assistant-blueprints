@@ -148,7 +148,7 @@ variables:
     {% elif alternative_brightness_target_light.entity_id is string %}
       {{ [alternative_brightness_target_light.entity_id] }}
     {% else %}
-      {{ alternative_brightness_target_light }}
+      {{ alternative_brightness_target_light.entity_id }}
     {% endif %}
   wait_for_state: '{{ trigger.id == ''idMotionOff'' | iif(''off'', ''on'') }}'
   light_ids: '{{ alternative_brightness_enabled | iif(alternative_brightness_target_light_ids,
